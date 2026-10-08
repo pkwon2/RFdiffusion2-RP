@@ -1,0 +1,166 @@
+defaults:
+  - fm_tip_center_all_from_scratch_enz
+
+rundir: /projects/ml/pkwon2/training_repeat_protein_data
+wandb_prefix: paul_yaml_from_brian
+
+ckpt_load_path: /projects/ml/pkwon2/model_checkpoints/reshaped_checkpoint_15_t1d_119_t2d_72.pt
+
+# If your run crashes, change the ckpt_load_path to the most recent one in your log and set these to true
+resume: False
+resume_scheduler: False
+
+# bcov has no idea what these do
+pseudobatch: 72
+
+diffuser:
+  preserve_motif_sidechains: true
+  center_noise_sample: false
+
+# this really, really has to be here or you'll start from scratch
+zero_weights: False
+
+datahub:
+  dataset_paul:
+    probability: 0.25
+    dataset:
+      _target_: datahub.datasets.datasets.StructuralDatasetWrapper
+      save_failed_examples_to_dir: null
+      cif_parser_args:
+        load_from_cache: False
+        save_to_cache: False
+      dataset_parser:
+        _target_: rf_diffusion.datahub_dataset_interface.SimplePathParser
+      dataset:
+        _target_: datahub.datasets.datasets.PandasDataset
+        name: dataset_paul
+        id_column: example_id
+        data: /projects/ml/pkwon2/training_repeat_protein_data/repeat_protein.parquet
+        filters:
+          - "cluster.notnull()"
+        columns_to_load:
+          - example_id
+          - cluster
+          - path
+      transform:
+        _target_: rf_diffusion.datahub_pipelines.rf_diffusion.build_rf_diffusion_transform_pipeline
+        crop_size: 375
+        crop_contiguous_probability: 0.9
+        crop_spatial_probability: 0.1
+    weights:
+      _target_: datahub.samplers.calculate_weights_by_inverse_cluster_size
+
+dataloader:
+  DATAHUB_MODE: BOTH
+  P_IS_GUIDEPOST_EXAMPLE: 0.5
+  DATASETS: pdb_aa,compl,sm_complex,sm_compl_covale,metal_compl,sm_compl_asmb,sm_compl_multi
+  DATASET_PROB:
+  - 0.3 # these have to sum to 1 with the probabilities in datahub
+  - 0.15
+  - 0.1125
+  - 0.075
+  - 0.0375
+  - 0.0375
+  - 0.0375
+
+  DIFF_MASK_PROBS:
+    get_tip_mask: 0
+
+    get_unconditional_diffusion_mask_free_ligand: 0.1    # p_uncond
+    get_tip_mask_unconditional_free_ligand: 0.045        # (1-p_uncond) * p_tip * 0.1
+    get_tip_mask_whole_ligand: 0.2835            # (1-p_uncond) * (1-p_cfg_uncond) * p_tip * p_whole
+    get_tip_mask_partial_ligand: 0.081           # (1-p_uncond) * (1-p_cfg_uncond) * p_tip * p_partial
+    get_tip_mask_free_ligand: 0.0405             # (1-p_uncond) * (1-p_cfg_uncond) * p_tip * p_free
+    get_tip_mask_bb_only_whole_ligand: 0.315             # (1-p_uncond) * (1-p_tip) * p_whole
+    get_tip_mask_bb_only_partial_ligand: 0.09            # (1-p_uncond) * (1-p_tip) * p_partial
+    get_tip_mask_bb_only_free_ligand: 0.045              # (1-p_uncond) * (1-p_tip) * p_free
+    
+  mask:
+    n_atomize_min: 4
+    n_atomize_max: 8
+
+benchmark: False
+
+loss:
+  backprop_non_displacement_on_given: false
+  use_fapes: false 
+
+experiment:
+  motif_fape_weight: 0.0
+  nonmotif_fape_weight: 0.0
+  ligand_intra_fape_weight: 0.0
+  prot_lig_inter_fape_weight: 0.0
+
+upstream_training_transforms:
+  names:
+    - GenerateMasks
+    - PopMask
+    - GenerateSSADJTrainingTransform
+  configs:
+    GenerateMasks: {}
+    PopMask: {}
+    GenerateSSADJTrainingTransform:
+      p_is_ss_example: 0.2                # At 0.2 these take about 8 epochs to start working fully
+      p_is_adj_example: 0.2
+      ss_min_mask: 0.0
+      ss_max_mask: 1.0
+      adj_min_mask: 0.0
+      adj_max_mask: 1.0
+      p_any_strand_pairs: 0.2
+      adj_strand_pair_min_mask: 0.0
+      adj_strand_pair_max_mask: 1.0
+
+transforms:
+  names:
+    - AddConditionalInputs
+    - ExpandConditionsDict      # Needed for upstream_transforms
+    - CenterPostTransform
+
+  configs:
+    ExpandConditionsDict: {}
+    CenterPostTransform:
+      jitter: 5.0
+      jitter_clip: 20.0
+      center_type: 'all'  # What do you think Woody? I'd argue that enzdez will work just fine like this but PPI doesn't like 'all'
+
+extra_tXd:                 # If I deleted anything here it was by accident
+  - radius_of_gyration_v2
+  - relative_sasa_v2
+  - sinusoidal_timestep_embedding
+  - ss_adj_cond
+
+extra_tXd_params:
+  radius_of_gyration_v2:
+    prob: 0.2
+    low: 10
+    high: 100
+    n_bins: 9
+  relative_sasa_v2:
+    prob: 0.2
+    low: 0
+    high: 0.2
+    n_bins: 3
+  ss_adj_cond: {}
+  sinusoidal_timestep_embedding:
+    embedding_dim: 20
+    max_positions: 10000
+
+rf:
+  model:
+    d_t1d: 119 # 114 + N_SS(5)
+    d_t2d: 72  # not sure 68 + N_ADJ(4)?
+    use_chiral_l1: True
+    use_lj_l1: True
+    use_atom_frames: True
+    use_same_chain: True
+    recycling_type: all
+    enable_same_chain: True
+    refiner_topk: 128
+
+# Visualization/debug flags for secondary-structure conditioning
+show_dataset:
+  show_ss_cond: False
+  ss_t1d_offset: -5
+  show_adj_strand_pairs: False
+  adj_t2d_offset: -4
+  hotspot_t1d_offset: -9

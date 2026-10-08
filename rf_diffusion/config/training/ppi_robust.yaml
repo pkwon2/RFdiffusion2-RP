@@ -1,0 +1,253 @@
+defaults:
+  - fm_tip_center_all_from_scratch_enz
+
+zero_weights: False
+
+rundir: /net/scratch/bcov/sc/flow/rf_diffusion_repo/rf_diffusion/training
+wandb_prefix: ppi_robust
+
+
+#ckpt_load_path: models/woody_rfd_140_241209_reshaped_t1d-123_t2d-72.pt
+#ckpt_load_path: models/rf2a_25c_reshaped_t1d-123_t2d-72.pt
+ckpt_load_path: /net/scratch/bcov/sc/flow/rf_diffusion_repo/rf_diffusion/training/ppi_robust2025-04-11_18:31:54.647016/rank_0/models/RFD_22.pt
+resume: True
+resume_scheduler: True
+
+
+# ckpt_load_path: models/woody_rfd_140_241209.pt
+# reshape:
+#    output_path:  models/woody_rfd_140_241209_reshaped_t1d-123_t2d-72.pt
+
+
+
+pseudobatch: 72
+diffuser:
+  preserve_motif_sidechains: true
+  center_noise_sample: false
+
+dataloader:
+  P_IS_GUIDEPOST_EXAMPLE: 0.75
+  DATASETS: pdb_aa,compl,sm_complex,sm_compl_covale,metal_compl,sm_compl_asmb,sm_compl_multi
+  DATASET_PROB:
+  - 0.24
+  - 0.53    # I ~tripled compl. My instinct says that 20% of cases might not be enough but idk. I was using 60%
+  - 0.08
+  - 0.06
+  - 0.03
+  - 0.03
+  - 0.03
+  DIFF_MASK_PROBS:
+    # SIMPLE
+    # get_unconditional_diffusion_mask_free_ligand: 0.1
+    # get_tip_mask: 0.405 # (1-p_uncond)* p_tip * 0.9
+    # get_tip_mask_unconditional_free_ligand: 0.045 # (1-p_uncond) * p_tip * 0.1
+    # get_tip_mask_bb_only: 0.45
+
+    # PARTIAL LIGAND MASKING
+    # p_uncond=0.1
+    # p_tip=0.5         Probability of tip
+    # p_gp=0.5          Probability of guidepost
+    # p_cfg_uncond=0.1  Probability of CFG-enabling analog of tip-atom (no motif, tip atom atomization, guideposts)
+    # p_whole=0.7       Probability of whole ligand
+    # p_partial=0.2     Probability of partial ligand
+    # p_free=0.1        Probability of free ligand
+    # Reset previously set mask values
+    get_tip_mask: 0
+
+    get_unconditional_diffusion_mask_free_ligand: 0.1    # p_uncond
+    get_tip_mask_unconditional_free_ligand: 0.045        # (1-p_uncond) * p_tip * 0.1
+    get_tip_mask_whole_ligand: 0.2835            # (1-p_uncond) * (1-p_cfg_uncond) * p_tip * p_whole
+    get_tip_mask_partial_ligand: 0.081           # (1-p_uncond) * (1-p_cfg_uncond) * p_tip * p_partial
+    get_tip_mask_free_ligand: 0.0405             # (1-p_uncond) * (1-p_cfg_uncond) * p_tip * p_free
+    get_tip_mask_bb_only_whole_ligand: 0.315             # (1-p_uncond) * (1-p_tip) * p_whole
+    get_tip_mask_bb_only_partial_ligand: 0.09            # (1-p_uncond) * (1-p_tip) * p_partial
+    get_tip_mask_bb_only_free_ligand: 0.045              # (1-p_uncond) * (1-p_tip) * p_free
+
+
+    # These all sum to 1.35. The reason is that if a single-chain example is shown, the PPI masks don't trigger
+
+    # Crop strategy
+    # p_no_crop=0.5
+    # p_radial_crop=0.25
+    # p_planar_crop=0.25
+
+    # Motif strategy
+    # p_fully_diffused=0.5
+    # p_interface_motif=0.3
+    # p_random_motif=0.2
+
+    # Extras
+    # p_tip=0.5
+    # p_binder_seqshown=0.25    # lol sorry. This is going to be a += to get us to that 1.35 number. Maybe we could make 18 more masks...
+    # p_target_seq_hidden=0.1   # lol sorry. This is going to be a += to get us to that 1.35 number
+
+    # Everything besides the *_seq* ones sums to 1
+    get_PPI_fully_diffused_no_crop_w_binder_seqshown_islands: 0.125  # p_binder_seqshown * (1-p_tip)
+    get_PPI_fully_diffused_no_crop_w_target_seqhidden_islands: 0.05  # p_target_seq_hidden * (1-p_tip)
+    get_PPI_fully_diffused_no_crop: 0.125           # p_no_crop * p_fully_dffused * (1 - p_tip)
+    get_PPI_fully_diffused_radial_crop: 0.0625      # p_radial_crop * p_fully_diffused * (1 - p_tip)
+    get_PPI_fully_diffused_planar_crop: 0.0625      # p_planar_crop * p_fully_diffused * (1 - p_tip)
+    get_PPI_interface_motif_no_crop: 0.075        # p_no_crop * p_interface_motif * (1 - p_tip)
+    get_PPI_interface_motif_radial_crop: 0.0375   # p_radial_crop * p_interface_motif * (1 - p_tip)
+    get_PPI_interface_motif_planar_crop: 0.0375   # p_planar_crop * p_interface_motif * (1 - p_tip)
+    get_PPI_random_motif_no_crop: 0.05           # p_no_crop * p_random_motif * (1 - p_tip)
+    get_PPI_random_motif_radial_crop: 0.025      # p_radial_crop * p_random_motif * (1 - p_tip)
+    get_PPI_random_motif_planar_crop: 0.025      # p_planar_crop * p_random_motif * (1 - p_tip)
+
+    get_PPI_fully_diffused_no_crop_w_binder_w_tip_seqshown_islands: 0.125   # p_binder_seqshown * p_tip
+    get_PPI_fully_diffused_no_crop_w_target_w_tip_seqhidden_islands: 0.05   # p_target_seq_hidden * p_tip
+    get_PPI_fully_diffused_no_crop_w_tip: 0.125           # p_no_crop * p_fully_dffused * p_tip
+    get_PPI_fully_diffused_radial_crop_w_tip: 0.0625      # p_radial_crop * p_fully_diffused * p_tip
+    get_PPI_fully_diffused_planar_crop_w_tip: 0.0625      # p_planar_crop * p_fully_diffused * p_tip
+    get_PPI_interface_motif_no_crop_w_tip: 0.075        # p_no_crop * p_interface_motif * p_tip
+    get_PPI_interface_motif_radial_crop_w_tip: 0.0375   # p_radial_crop * p_interface_motif * p_tip
+    get_PPI_interface_motif_planar_crop_w_tip: 0.0375   # p_planar_crop * p_interface_motif * p_tip
+    get_PPI_random_motif_no_crop_w_tip: 0.05           # p_no_crop * p_random_motif * p_tip
+    get_PPI_random_motif_radial_crop_w_tip: 0.025      # p_radial_crop * p_random_motif * p_tip
+    get_PPI_random_motif_planar_crop_w_tip: 0.025      # p_planar_crop * p_random_motif * p_tip
+
+
+
+    # TESTING 
+    # get_unconditional_diffusion_mask_free_ligand: 0.0
+    # get_tip_mask_unconditional_free_ligand: 0.0
+    # get_tip_mask_bb_only_whole_ligand: 1.0            # (1-p_uncond) * (1-p_cfg_uncond) * p_tip * p_whole
+    # get_tip_mask_partial_ligand: 0.5            # (1-p_uncond) * (1-p_cfg_uncond) * p_tip * p_whole
+
+
+
+  fast_filters:  # This is purely a speedup. However, the Nate + Joe filters do separate cropping and we know stuff going in like this will be bad
+    compl:
+      names: ['reject_chain0_longer_than']
+      configs:
+        reject_chain0_longer_than:
+          max_length: 170
+          verbose: False
+    metal_compl: ${dataloader.fast_filters.compl}
+    sm_compl_asmb: ${dataloader.fast_filters.compl}
+    sm_compl_multi: ${dataloader.fast_filters.compl}
+
+  dataset_param_overrides:  # We can't use RF2aa's cropping scheme for binder design. "Cropped training examples make cropped outputs" - Joe
+    compl:
+      CROP: 600
+    metal_compl: ${dataloader.dataset_param_overrides.compl}
+    sm_compl_asmb: ${dataloader.dataset_param_overrides.compl}
+    sm_compl_multi: ${dataloader.dataset_param_overrides.compl}
+
+  mask: # Configs for the PPI masks
+    only_first_chain_ppi_binders: True
+    ppi_radial_crop_low: 10       # PPI radial crop distance from hotspots lowerbound
+    ppi_radial_crop_high: 25      # PPI radial crop distance from hotspots upperbound
+    ppi_planar_crop_low: 10       # PPI planar crop distance from hotspots lowerbound
+    ppi_planar_crop_high: 25      # PPI planar crop distance from hotspots upperbound
+    max_frac_ppi_motifs: 0.8      # PPI maximum fraction of motifs kept in motif masks
+    max_ppi_motif_trim_frac: 0.4  # PPI maximum fraction of a single motif that is removed when trimming motifs
+
+
+  
+benchmark: False # bcov says nope
+  # run_early_validation: true
+  # inference_yaml: aa_validation
+  # pipeline_yaml: training_benchmarks_enz.yaml
+
+
+
+
+upstream_training_transforms:
+  names:
+    - PPITrimTailsChain0ComplexTransform   # controversial but won't give you floppy binder tails
+    - PPIRejectUnfoldedInterfacesTransform # controversial but will give you well folded binders
+    - PPIJoeNateDatasetRadialCropTransform # "It's what Nate and Joe did"
+    - GenerateMasks
+    - PopMask
+    - FindHotspotsTrainingTransform
+    - GenerateSSADJTrainingTransform
+  configs:
+    PPITrimTailsChain0ComplexTransform:
+      operate_on_datasets: ['compl', 'metal_compl', 'sm_compl_asmb', 'sm_compl_multi']
+      scn_unfolded_thresh: 1.0
+      can_remove_hotspots: True
+      all_but_1_cutoff: 4
+      all_but_2_cutoff: 8
+      n_mer: 9
+      verbose: True
+    PPIRejectUnfoldedInterfacesTransform:
+      operate_on_datasets: ${upstream_training_transforms.configs.PPITrimTailsChain0ComplexTransform.operate_on_datasets}
+      binder_fbscn_cut: 0.12
+      binder_fbscn_at_interface_cut: 0.13 # fraction boundary by side chain neighbors
+    PPIJoeNateDatasetRadialCropTransform:
+      operate_on_datasets: ${upstream_training_transforms.configs.PPITrimTailsChain0ComplexTransform.operate_on_datasets}
+      CROP: ${dataloader.CROP}
+    GenerateMasks: {}
+    PopMask: {}
+    FindHotspotsTrainingTransform:
+      p_is_hotspot_example: 0.75      # Arrrrg, what to set this to? Maybe with the ORI it doesn't matter. Activates any time there are 2+ chains
+      p_is_antihotspot_example: 0.1
+      max_hotspot_frac: 0.2
+      max_antihotspot_frac: 0.05
+      only_hotspots_of_first_chain: True   # Controversial. But you'd have to change a lot more than just this one flag
+      hotspot_distance: 7
+      antihotspot_distance: 10
+      hotspot_downsample_method: speckle_or_region
+      hotspot_sasa_cut: 30
+      hotspot_values_mean: tenA_neighbors # This enables super hotspots. Set to False if you don't want them
+    GenerateSSADJTrainingTransform:
+      p_is_ss_example: 0.2                # At 0.2 these take about 8 epochs to start working fully
+      p_is_adj_example: 0.2
+      ss_min_mask: 0.0
+      ss_max_mask: 1.0
+      adj_min_mask: 0.0
+      adj_max_mask: 1.0
+      p_any_strand_pairs: 0.2
+      adj_strand_pair_min_mask: 0.0
+      adj_strand_pair_max_mask: 1.0
+
+transforms:
+  names:
+    - AddConditionalInputs
+    - ExpandConditionsDict      # Needed for upstream_transforms
+    - CenterPostTransform
+    - RejectOutOfMemoryHazards  # This is just good to have for training sanity. GP PPI examples will definitely blow this up occasionally
+
+  configs:
+    ExpandConditionsDict: {}
+    CenterPostTransform:
+      jitter: 5.0
+      jitter_clip: 20.0
+      center_type: is_diffused  # What do you think Woody? I'd argue that enzdez will work just fine like this but PPI doesn't like 'all'
+    RejectOutOfMemoryHazards:
+      max_size: 364             # Ok on A100s, will for sure crash on L40s
+
+
+
+extra_tXd:                 # If I deleted anything here it was by accident
+  - radius_of_gyration_v2
+  - relative_sasa_v2
+  - sinusoidal_timestep_embedding
+  - ppi_hotspots_antihotspots
+  - ss_adj_cond
+
+
+extra_tXd_params:
+  radius_of_gyration_v2:
+    prob: 0.2
+  relative_sasa_v2:
+    prob: 0.2
+  ppi_hotspots_antihotspots: {}
+  ss_adj_cond: {}
+
+
+rf:
+  model:
+    d_t1d: 123 # 114 + hotspots(4) + N_SS(5)
+    d_t2d: 72 # 68 + N_ADJ(4)
+
+
+
+show_dataset:
+    show_ss_cond: False # Show the secondary structure conditioning that has been applied
+    ss_t1d_offset: -5 # Offset into t1d for the first (SS_HELIX) of the ss conditioning channels. Supports negative indexing
+    show_adj_strand_pairs: False #  # Show secondary structural elements involved in strand pairing (ADJ_STRAND_PAIR)
+    adj_t2d_offset: -4 # Offset into t2d for the first (ADJ_FAR) of the adj conditioning channels. Supports negative indexing
+    show_hotspots: True # Show positions that have been marked as hotspots
+    hotspot_t1d_offset: -9 # Offset into t1d for the hotspot conditioning. Supports negative indexing which is likely the way to find it

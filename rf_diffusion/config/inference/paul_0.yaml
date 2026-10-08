@@ -1,0 +1,78 @@
+# Base inference Configuration.
+defaults:
+  - base
+
+guidepost_bonds: True
+
+inference:
+  scaffold_guided: False
+  align_motif: False
+  str_self_cond: False
+  state_dict_to_use: model_state_dict
+  deterministic: False
+  ckpt_path: /net/scratch/ahern/se3_diffusion/training/center_all_from_scratch_enz_finetune_stage_2a/center_all_from_scratch_enz_finetune_stage_2a2024-07-03_02:34:09.651142/rank_0/models/RFD_140.pt
+  idealize_sidechain_outputs: True
+idealization_metric_n_steps: 50
+
+diffuser:
+  T: 100
+  trans:
+    sample_schedule: linear
+    exp_rate: 1
+  rots:
+    sample_schedule: normed_exp
+    exp_rate: 10
+
+upstream_inference_transforms: # These transforms don't do anything unless specific flags are set
+  names:
+    - AutogenerateTargetSSADJTransform
+    - LoadTargetSSADJTransform
+    - SSSprinkleTransform
+    - ADJSprinkleTransform
+  configs:
+    AutogenerateTargetSSADJTransform: {}
+    LoadTargetSSADJTransform: {}
+    SSSprinkleTransform:
+      active: False
+      background: MASK
+      helix_chunk_size: 3
+      strand_chunk_size: 3
+      loop_chunk_size: 3
+      mask_chunk_size: 3
+      min_helix: 0
+      max_helix: 0
+      min_strand: 0
+      max_strand: 0
+      min_loop: 0
+      max_loop: 0
+      min_mask: 0
+      max_mask: 0
+      spread_efficiency: 0.7
+      chain0_only: True
+    ADJSprinkleTransform:
+      active: False
+      use_existing_ss: False
+      use_existing_mode: 'full'
+      use_existing_chunk_size: 4
+      use_existing_loop_is_mask: True
+      from_scratch_chunk_size: 4
+      from_scratch_off_diag_min: 8
+      from_scratch_off_diag_max: 12
+      from_scratch_coverage: 0.5
+      from_scratch_spread_efficiency: 0.7
+      chain0_only: True
+
+scaffoldguided: # This group of flags is related to the original Joe + Nate diffusion scaffold loader using ss/adj files
+  scaffold_list: null # Optional: Either an actual list ['A', 'B'] or a path to a .txt file that contains scaffold names. A contig for each scaffold may be included after the name
+  scaffold_dir: null # Either this or scaffold_arc must be specified. A path to a dir of _ss.pt and _adj.pt files. Will be ls'd if scaffold_list is null
+  scaffold_arc: null # Either this or scaffold_dir must be specified. A dictionary stored as a .pt file mapping scaffold names to tuple(ss,adj). Use all if scaffold_list is null
+  sampled_insertion: 0 # Up to this many MASK tokens will be injected into every loop/mask segment of your scaffold
+  sampled_N: 0 # Up to this many MASK tokens will be added to the front of your scaffold
+  sampled_C: 0 # Up to this many MASK tokens will be added to the end of your scaffold
+  ss_mask: 0 # Each non-loop/non-mask section will be trimmed by this many AA
+  systematic: False # Should your scaffold_list (or contents of scaffold_dir/scaffold_arc) be traversed in order or randomly without replacement?
+  mask_loops: True # Should loops in your ss file be converted to MASK?
+  not_legacy_adj: False # In Joe + Nate's ss/adj files, loops are set to ADJ_FAR which is unfortunate (when they are truly ADJ_MASK). If you actually want this behavior, set this true
+  target_ss: null # ss file for your target. See new autogenerate_target_ss_adj
+  target_adj: null # adj file for your target. See new autogenerate_target_ss_adj
+  autogenerate_target_ss_adj: False # Autogenerate the ss/adj file for your target. Same as make_secstruc_adj.py output. No slowdown

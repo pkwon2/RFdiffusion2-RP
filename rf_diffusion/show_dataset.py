@@ -11,7 +11,7 @@ from omegaconf import DictConfig
 
 
 from rf_diffusion.dev import pymol
-pymol.init(pymol_url='http://chesaw.dhcp.ipd:9123')
+pymol.init(pymol_url='http://127.0.0.1:1998')
 
 cmd = pymol.cmd
 

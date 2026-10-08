@@ -270,7 +270,7 @@ class Trainer():
             )
 
             # Auxiliary interface weighted loss for multi chain diffusion (nucleic, PPI, etc)
-            if 'i_fm_translation_loss_weight' in self.conf.experiment and 'i_fm_rotation_loss_weight' in self.conf.experiment:                         
+            if False and 'i_fm_translation_loss_weight' in self.conf.experiment and 'i_fm_rotation_loss_weight' in self.conf.experiment:                         
                 assert gt_trans_1.shape[0] == 1  # Only currently implemented for batch size 1
                 assert indep.xyz.shape[0] == gt_trans_1.shape[1]
 
@@ -455,7 +455,7 @@ class Trainer():
         loss_dict['dist_mat'] = dist_mat_loss
 
         # Auxillary losses to help with full-atom (nucleic) coordinate generation:
-        if 'fa_disp_loss_weight' in self.conf.experiment:
+        if False and 'fa_disp_loss_weight' in self.conf.experiment:
             # Full-atom displacement loss (necessary for learning/remembering how to predict good alphas):
             # (this matters for nucleic acids, since the sugar backbone needs torsions for generation)
             # Define mask: compute for defined atoms (all if known seq, just backbone if diffused)

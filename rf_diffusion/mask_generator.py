@@ -24,7 +24,6 @@ from rf_diffusion import tip_atoms
 import rf_diffusion.ppi as ppi
 from typing import Literal, Callable
 
-
 import itertools
 import rf_diffusion.util as rfd_util
 

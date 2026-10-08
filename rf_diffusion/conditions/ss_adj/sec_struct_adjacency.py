@@ -555,84 +555,274 @@ def convert_legacy_ss_adj(ss, adj):
     return ss, adj
 
 
+# class LoadTargetSSADJTransform:
+#     def __call__(self, indep, conf, conditions_dict, **kwargs):
+#         '''
+#         A dataloader transform that applies scaffoldguided.target_ss and target_adj to the conditions_dict
+
+#         The ss and adj files are loaded to the back of the indep and must fully encompass chains (can't partially do a chain)
+#         You can theoretically specify the entire ss/adj with this overwriting your scaffold. But a warning is shown
+
+#         Args:
+#             indep (Indep): Indep
+#             conf (OmegaConf): The config
+#             conditions_dict (dict): The inference conditions
+
+#         Returns:
+#             Return signature is the same as call signature but conditions_dict['ss_adj'] has been updated
+#         '''
+
+#         ss = None
+#         size = None
+#         if conf.scaffoldguided.target_ss is not None:
+#             assert os.path.exists(conf.scaffoldguided.target_ss), f'scaffoldguided.target_ss: {conf.scaffoldguided.target_ss} does not exist!'
+#             ss = torch.load(conf.scaffoldguided.target_ss, weights_only=False)
+#             assert len(ss.shape) == 1
+#             size = ss.shape[0]
+
+#         adj = None
+#         if conf.scaffoldguided.target_adj is not None:
+#             assert os.path.exists(conf.scaffoldguided.target_adj), f'scaffoldguided.target_adj: {conf.scaffoldguided.target_adj} does not exist!'
+#             adj = torch.load(conf.scaffoldguided.target_adj, weights_only=False)
+#             assert len(adj.shape) == 2
+#             assert adj.shape[0] == adj.shape[1]
+#             size = adj.shape[0]
+
+#         if ss is not None and adj is not None:
+#             assert ss.shape[0] == adj.shape[0], f'Your target_ss {ss.shape} and target_adj {adj.shape} have different sizes!'
+
+#             if not conf.scaffoldguided.not_legacy_adj:
+#                 convert_legacy_ss_adj(ss, adj)
+
+# # If either is specified
+#         if size is not None:
+#             assert size > 0, 'Your target_ss or target_adj have size 0!'
+#             assert size <= indep.length(), (
+#                 f'Your target_ss/target_adj is bigger than your entire diffusion scenario! '
+#                 f'target_size={size}, indep_length={indep.length()}'
+#             )
+
+#             # Guidepost-aware mapping:
+#             # apply target SS/ADJ only to non-guidepost positions
+#             target_mask = ~indep.is_gp
+#             target_idx = torch.where(target_mask)[0]
+
+#             print("\n===== SS/ADJ LOAD DEBUG =====")
+#             print("indep.length():", indep.length())
+#             print("target size:", size)
+#             print("n guideposts:", indep.is_gp.sum().item())
+#             print("n non-guideposts:", target_idx.numel())
+#             print("chains:", indep.chains())
+#             print("=============================\n")
+
+#             assert target_idx.numel() == size, (
+#                 f"target_ss/target_adj size is {size}, but there are "
+#                 f"{target_idx.numel()} non-guidepost positions. "
+#                 f"Total={indep.length()}, "
+#                 f"guideposts={indep.is_gp.sum().item()}"
+#             )
+
+#             # Actually do the assignment
+#             ss_adj = SecStructAdjacency(
+#                 full_mask_length=indep.length()
+#             )
+
+#             merge_1d = torch.zeros(
+#                 (indep.length(),),
+#                 dtype=bool
+#             )
+
+#             merge_2d = torch.zeros(
+#                 (indep.length(), indep.length()),
+#                 dtype=bool
+#             )
+
+#             if ss is not None:
+#                 ss_adj.ss[target_idx] = ss
+#                 merge_1d[target_idx] = True
+
+#             if adj is not None:
+#                 ss_adj.adj[
+#                     target_idx[:, None],
+#                     target_idx[None, :]
+#                 ] = adj
+
+#                 merge_2d[
+#                     target_idx[:, None],
+#                     target_idx[None, :]
+#                 ] = True
+
+#             if 'ss_adj' not in conditions_dict:
+#                 conditions_dict['ss_adj'] = ss_adj
+#             else:
+#                 conditions_dict['ss_adj'].merge_other_into_this(
+#                     ss_adj,
+#                     merge_1d,
+#                     merge_2d
+#                 )
+
+#         return kwargs | dict(
+#             indep=indep,
+#             conf=conf,
+#             conditions_dict=conditions_dict,
+#         )
+
 class LoadTargetSSADJTransform:
+    def __init__(self, exclude_start=None, exclude_length=0):
+        self.exclude_start = exclude_start
+        self.exclude_length = exclude_length
+
     def __call__(self, indep, conf, conditions_dict, **kwargs):
         '''
-        A dataloader transform that applies scaffoldguided.target_ss and target_adj to the conditions_dict
+        A dataloader transform that applies scaffoldguided.target_ss
+        and target_adj to the conditions_dict.
 
-        The ss and adj files are loaded to the back of the indep and must fully encompass chains (can't partially do a chain)
-        You can theoretically specify the entire ss/adj with this overwriting your scaffold. But a warning is shown
-
-        Args:
-            indep (Indep): Indep
-            conf (OmegaConf): The config
-            conditions_dict (dict): The inference conditions
-
-        Returns:
-            Return signature is the same as call signature but conditions_dict['ss_adj'] has been updated
+        Optionally excludes a contiguous block of positions from the
+        target SS/ADJ mapping.
         '''
 
         ss = None
         size = None
+
         if conf.scaffoldguided.target_ss is not None:
-            assert os.path.exists(conf.scaffoldguided.target_ss), f'scaffoldguided.target_ss: {conf.scaffoldguided.target_ss} does not exist!'
-            ss = torch.load(conf.scaffoldguided.target_ss, weights_only=False)
+            assert os.path.exists(conf.scaffoldguided.target_ss), (
+                f'scaffoldguided.target_ss: '
+                f'{conf.scaffoldguided.target_ss} does not exist!'
+            )
+
+            ss = torch.load(
+                conf.scaffoldguided.target_ss,
+                weights_only=False
+            )
+
             assert len(ss.shape) == 1
             size = ss.shape[0]
 
         adj = None
+
         if conf.scaffoldguided.target_adj is not None:
-            assert os.path.exists(conf.scaffoldguided.target_adj), f'scaffoldguided.target_adj: {conf.scaffoldguided.target_adj} does not exist!'
-            adj = torch.load(conf.scaffoldguided.target_adj, weights_only=False)
+            assert os.path.exists(conf.scaffoldguided.target_adj), (
+                f'scaffoldguided.target_adj: '
+                f'{conf.scaffoldguided.target_adj} does not exist!'
+            )
+
+            adj = torch.load(
+                conf.scaffoldguided.target_adj,
+                weights_only=False
+            )
+
             assert len(adj.shape) == 2
             assert adj.shape[0] == adj.shape[1]
             size = adj.shape[0]
 
         if ss is not None and adj is not None:
-            assert ss.shape[0] == adj.shape[0], f'Your target_ss {ss.shape} and target_adj {adj.shape} have different sizes!'
+            assert ss.shape[0] == adj.shape[0], (
+                f'Your target_ss {ss.shape} and target_adj '
+                f'{adj.shape} have different sizes!'
+            )
 
             if not conf.scaffoldguided.not_legacy_adj:
                 convert_legacy_ss_adj(ss, adj)
 
-        # If either is specified
         if size is not None:
-            assert size > 0, 'Your target_ss or target_adj have size 0!'
-            assert size <= indep.length(), 'Your target_ss/target_adj is bigger than your entire diffusion scenario!'
+            assert size > 0, (
+                'Your target_ss or target_adj have size 0!'
+            )
 
-            # Make sure that they are not crossing chain boundaries with their ss or adj
-            if size == indep.length():
-                print('Warning! Your target_ss/target_adj are the same size as your entire diffusion scenario. Scaffold ss/adj will be overwritten!')
-            else:
-                chains = indep.chains()
-                not_included = set(list(chains[:-size]))
-                included = set(list(chains[-size:]))
-                split_chains = included & not_included
+            assert size <= indep.length(), (
+                f'Your target_ss/target_adj is bigger than your '
+                f'entire diffusion scenario! '
+                f'target_size={size}, '
+                f'indep_length={indep.length()}'
+            )
 
-                assert len(split_chains) == 0, f'Your target_ss/target_adj files are partially including chains {split_chains} which is not allowed.'
-            
-            # Actually do the assignment
-            ss_adj = SecStructAdjacency(full_mask_length=indep.length())
-            merge_1d = torch.zeros((indep.length(),), dtype=bool)
-            merge_2d = torch.zeros((indep.length(), indep.length()), dtype=bool)
+            # Start with all positions included
+            target_mask = torch.ones(
+                indep.length(),
+                dtype=torch.bool
+            )
+
+            # Optionally exclude a contiguous motif block
+            if (
+                self.exclude_start is not None
+                and self.exclude_length > 0
+            ):
+                exclude_end = (
+                    self.exclude_start
+                    + self.exclude_length
+                )
+
+                assert 0 <= self.exclude_start < indep.length()
+                assert exclude_end <= indep.length()
+
+                target_mask[
+                    self.exclude_start:exclude_end
+                ] = False
+
+            target_idx = torch.where(target_mask)[0]
+
+            print("\n===== SS/ADJ LOAD DEBUG =====")
+            print("indep.length():", indep.length())
+            print("target size:", size)
+            print("mapped positions:", target_idx.numel())
+            print("exclude_start:", self.exclude_start)
+            print("exclude_length:", self.exclude_length)
+            print("=============================\n")
+
+            assert target_idx.numel() == size, (
+                f"target_ss/target_adj size is {size}, but "
+                f"{target_idx.numel()} positions are selected. "
+                f"Total={indep.length()}, "
+                f"exclude_start={self.exclude_start}, "
+                f"exclude_length={self.exclude_length}"
+            )
+
+            ss_adj = SecStructAdjacency(
+                full_mask_length=indep.length()
+            )
+
+            merge_1d = torch.zeros(
+                indep.length(),
+                dtype=bool
+            )
+
+            merge_2d = torch.zeros(
+                (indep.length(), indep.length()),
+                dtype=bool
+            )
 
             if ss is not None:
-                ss_adj.ss[-size:] = ss
-                merge_1d[-size:] = True
+                ss_adj.ss[target_idx] = ss
+                merge_1d[target_idx] = True
+
             if adj is not None:
-                ss_adj.adj[-size:,-size:] = adj
-                merge_2d[-size:,-size:] = True
+                ss_adj.adj[
+                    target_idx[:, None],
+                    target_idx[None, :]
+                ] = adj
+
+                merge_2d[
+                    target_idx[:, None],
+                    target_idx[None, :]
+                ] = True
 
             if 'ss_adj' not in conditions_dict:
                 conditions_dict['ss_adj'] = ss_adj
+
             else:
-                conditions_dict['ss_adj'].merge_other_into_this(ss_adj, merge_1d, merge_2d)
+                conditions_dict[
+                    'ss_adj'
+                ].merge_other_into_this(
+                    ss_adj,
+                    merge_1d,
+                    merge_2d
+                )
 
         return kwargs | dict(
             indep=indep,
             conf=conf,
             conditions_dict=conditions_dict,
-            )
-
+        )
 
 class AutogenerateTargetSSADJTransform:
     def __call__(self, indep, conf, conditions_dict, **kwargs):
