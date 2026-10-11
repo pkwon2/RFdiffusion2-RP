@@ -13,9 +13,6 @@
 [submodule "lib/cifutils"]
 	path = lib/cifutils
 	url = git@github.com:baker-laboratory/cifutils.git
-[submodule "lib/ipd"]
-	path = lib/ipd
-	url = https://github.com/baker-laboratory/ipd.git
 [submodule "lib/chai"]
 	path = lib/chai
 	url = git@git.ipd.uw.edu:ai/chai.git
