@@ -1,10 +1,8 @@
 # RFdiffusion2-RP: SS/Adj Conditioning and Inference
 
-This repository contains scripts and examples for running RFdiffusion2
-with secondary-structure (SS) and adjacency (adj) conditioning.
+This repository provides an example of generating secondary-structure (SS) and adjacency (adj) conditioning features for RFdiffusion2.
 
-The example demonstrates designing protein scaffolds around a
-cobalt-binding motif using a fine-tuned RFdiffusion2 model.
+The example demonstrates protein scaffold design around a cobalt-binding motif using a fine-tuned RFdiffusion2 checkpoint.
 
 ## 1. Repository Structure
 
@@ -14,7 +12,8 @@ RFdiffusion2-RP/
 ├── helper_scripts/
 │   ├── README.md
 │   ├── make_ss_adj_simple.py
-│   └── output_cobalt_renumbered.pdb
+│   └── inputs/
+│       └── output_cobalt_renumbered.pdb
 ├── rf_diffusion/
 │   ├── aa_model.py
 │   ├── run_inference.py
@@ -27,42 +26,39 @@ RFdiffusion2-RP/
 │   └── exec/
 │       ├── rf_diffusion_aa_shebang.sh
 │       └── bakerlab_rf_diffusion_aa.sif
-└── weights/
-    ├── RFD_8.pt
-    ├── RFD_9.pt
-    └── RFD_10.pt
+├── weights/
+│   ├── RFD_8.pt
+│   ├── RFD_9.pt
+│   └── RFD_10.pt
+└── outputs/
+    └── cobalt_ss_adj/
 ```
 
-The Apptainer image is downloaded separately and is not included
-in the GitHub repository.
+The Apptainer image is downloaded separately and is not included in the GitHub repository. Model checkpoints are stored using Git LFS.
 
-Model checkpoints are stored using Git LFS.
+The `outputs/` directory is created during inference.
 
 ---
 
 ## 2. Clone the Repository
 
-Clone the repository:
-
 ```bash
 git clone https://github.com/YOUR_USERNAME/RFdiffusion2-RP.git
-
 cd RFdiffusion2-RP
 ```
 
 Replace `YOUR_USERNAME` with your GitHub username.
 
-If your repository uses Git submodules, initialize them:
+If the repository uses Git submodules:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-Install Git LFS and download model weights:
+Download model checkpoints tracked by Git LFS:
 
 ```bash
 git lfs install
-
 git lfs pull
 ```
 
@@ -70,21 +66,15 @@ git lfs pull
 
 ## 3. Configure Environment Variables
 
-All paths are defined relative to the repository root.
-
 Run these commands from the root of the repository:
 
 ```bash
 export REPO_DIR="$PWD"
-
 export RFDIFFUSION_DIR="$REPO_DIR/rf_diffusion"
-
 export SIF_PATH="$RFDIFFUSION_DIR/exec/bakerlab_rf_diffusion_aa.sif"
 
 export WEIGHTS_DIR="$REPO_DIR/weights"
-
-export INPUT_DIR="$REPO_DIR/helper_scripts"
-
+export INPUT_DIR="$REPO_DIR/helper_scripts/inputs"
 export DESIGN_DIR="$REPO_DIR/outputs/cobalt_ss_adj"
 
 export PYTHONPATH="$REPO_DIR${PYTHONPATH:+:$PYTHONPATH}"
@@ -94,33 +84,28 @@ Create the required directories:
 
 ```bash
 mkdir -p "$RFDIFFUSION_DIR/exec"
-
 mkdir -p "$DESIGN_DIR"
 ```
 
-These environment variables make the commands portable across
-different computing environments.
+These variables allow the example to run regardless of where the repository is cloned.
 
 ---
 
 ## 4. Download the RFdiffusion2 Apptainer
 
-RFdiffusion2 uses an Apptainer container containing the Python
-environment and dependencies required for inference.
+RFdiffusion2 uses an Apptainer container to provide the Python environment and dependencies required for inference.
 
-The official container is available from:
+The container is available at:
 
 https://files.ipd.uw.edu/pub/rfdiffusion2/sifs/rfdiffusion.sif
 
 ### Download the container
 
-Run the following from the repository root:
+From the repository root:
 
 ```bash
 export REPO_DIR="$PWD"
-
 export RFDIFFUSION_DIR="$REPO_DIR/rf_diffusion"
-
 export SIF_PATH="$RFDIFFUSION_DIR/exec/bakerlab_rf_diffusion_aa.sif"
 
 mkdir -p "$RFDIFFUSION_DIR/exec"
@@ -139,35 +124,37 @@ else
 fi
 ```
 
-The downloaded container will be saved as:
+Although the remote filename is `rfdiffusion.sif`, the `curl -o` argument saves it locally as:
 
 ```text
 rf_diffusion/exec/bakerlab_rf_diffusion_aa.sif
 ```
 
-**Important:** Although the remote filename is `rfdiffusion.sif`,
-the `curl -o` option saves it locally as
-`bakerlab_rf_diffusion_aa.sif`.
+This matches the filename expected by the RFdiffusion shebang script.
 
-This filename is required by the repository's
-`rf_diffusion_aa_shebang.sh` script.
+### Make the container and shebang executable
+
+```bash
+chmod +x "$SIF_PATH"
+chmod +x "$RFDIFFUSION_DIR/exec/rf_diffusion_aa_shebang.sh"
+```
+
+The executable permission on the SIF is optional when launching it through `apptainer exec` or `apptainer run`. The shebang runner should be executable.
 
 ### Verify the installation
 
-Check that the container exists:
+Check the downloaded file:
 
 ```bash
 ls -lh "$SIF_PATH"
 ```
 
-Verify the Python environment:
+Test the Python environment:
 
 ```bash
 apptainer exec --nv "$SIF_PATH" \
     python -c "import torch, omegaconf; print('PyTorch:', torch.__version__); print('OmegaConf:', omegaconf.__version__)"
 ```
-
-The command should print the installed PyTorch and OmegaConf versions.
 
 ### Compatibility with the RFdiffusion shebang
 
@@ -177,47 +164,42 @@ The repository includes:
 rf_diffusion/exec/rf_diffusion_aa_shebang.sh
 ```
 
-This script automatically locates the Apptainer image using:
+The script locates the container using:
 
 ```bash
 SCRIPT_PATH=$(realpath "$0")
-
 SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 
 SIF_PATH="$SCRIPT_DIR/bakerlab_rf_diffusion_aa.sif"
 ```
 
-Therefore, the container must be located at:
+Therefore, the downloaded container must be located at:
 
 ```text
 rf_diffusion/exec/bakerlab_rf_diffusion_aa.sif
 ```
 
-Once installed, Python scripts configured with the corresponding
-shebang can automatically launch inside the container.
+Scripts configured with the RFdiffusion shebang can automatically run inside this container.
 
-**Note:** This container should not be committed to GitHub.
-Add `*.sif` to `.gitignore`.
+**Note:** The container should not be committed to GitHub. Add `*.sif` to `.gitignore`.
 
 ---
 
 ## 5. Generate Secondary-Structure and Adjacency Files
 
-RFdiffusion2 supports conditioning on secondary structure
-and pairwise adjacency relationships.
+RFdiffusion2 supports conditioning on secondary structure and pairwise adjacency relationships.
 
-This example generates SS and adjacency features from a
-cobalt-binding protein motif.
+This example generates SS and adjacency features from a cobalt-binding protein motif.
 
 ### Input PDB
 
-The input structure is:
+The example PDB is located at:
 
 ```text
-helper_scripts/output_cobalt_renumbered.pdb
+helper_scripts/inputs/output_cobalt_renumbered.pdb
 ```
 
-Set the input file path:
+Set its path:
 
 ```bash
 export INPUT_PDB="$INPUT_DIR/output_cobalt_renumbered.pdb"
@@ -231,63 +213,65 @@ Run:
 apptainer exec --nv \
     --env "PYTHONPATH=$PYTHONPATH" \
     "$SIF_PATH" \
-    python "$INPUT_DIR/make_ss_adj_simple.py" \
+    python "$REPO_DIR/helper_scripts/make_ss_adj_simple.py" \
     "$INPUT_PDB" \
     --aa-model "$RFDIFFUSION_DIR/aa_model.py" \
     --sec-struct-adjacency "$RFDIFFUSION_DIR/conditions/ss_adj/sec_struct_adjacency.py" \
     --mask-protein-ligand-adj
 ```
 
-The `make_ss_adj_simple.py` script generates secondary-structure
-and adjacency representations from the supplied PDB.
+The `make_ss_adj_simple.py` script generates secondary-structure and adjacency conditioning features from the input PDB.
 
-The `--mask-protein-ligand-adj` option masks protein-ligand
-adjacency information when constructing the conditioning features.
+The `--mask-protein-ligand-adj` flag masks protein–ligand adjacency information when generating the adjacency representation.
 
 ### Generated files
 
-The expected output files are:
+The expected files are:
 
 ```text
 output_cobalt_renumbered.ss
 output_cobalt_renumbered.adj
 ```
 
-The exact output location depends on how `make_ss_adj_simple.py`
-writes its results.
-
-For the inference example below, place the files in:
+For this example, the files should be available at:
 
 ```text
 helper_scripts/
-├── output_cobalt_renumbered.pdb
-├── output_cobalt_renumbered.ss
-└── output_cobalt_renumbered.adj
+├── make_ss_adj_simple.py
+└── inputs/
+    ├── output_cobalt_renumbered.pdb
+    ├── output_cobalt_renumbered.ss
+    └── output_cobalt_renumbered.adj
 ```
 
-Verify that both files exist:
+The exact output location depends on the implementation of `make_ss_adj_simple.py`.
+
+If the script writes the files elsewhere, move or copy them into `helper_scripts/inputs/` before running inference.
+
+### Verify generated files
 
 ```bash
 ls -lh "$INPUT_DIR/output_cobalt_renumbered.ss"
-
 ls -lh "$INPUT_DIR/output_cobalt_renumbered.adj"
 ```
 
-If necessary, copy the generated files into `helper_scripts/`.
+Both files must exist before running inference.
 
 ---
 
 ## 6. Configure Model Checkpoints
 
-The example uses a fine-tuned RFdiffusion2 checkpoint.
-
-Available model weights include:
+This example uses the fine-tuned RFdiffusion2 checkpoint:
 
 ```text
-weights/
-├── RFD_8.pt
-├── RFD_9.pt
-└── RFD_10.pt
+weights/RFD_8.pt
+```
+
+Additional checkpoints include:
+
+```text
+weights/RFD_9.pt
+weights/RFD_10.pt
 ```
 
 Set the checkpoint path:
@@ -296,37 +280,36 @@ Set the checkpoint path:
 export RFDIFFUSION_CKPT_PATH="$WEIGHTS_DIR/RFD_8.pt"
 ```
 
-The model weights are tracked using Git LFS.
+Confirm the file exists:
 
-Ensure that the checkpoint has been downloaded before
-running inference.
+```bash
+ls -lh "$RFDIFFUSION_CKPT_PATH"
+```
+
+Model checkpoints are stored using Git LFS.
 
 ---
 
 ## 7. Cobalt-Binding Protein Design Example
 
-This example designs a protein scaffold around a cobalt-binding
-motif using secondary-structure and adjacency conditioning.
+This example generates protein scaffolds around a cobalt-binding motif using secondary-structure, adjacency, and additional structural conditioning features.
 
 ### Design specifications
 
 | Parameter | Value |
-|-----------|-------|
-| Model checkpoint | RFD_8.pt |
+|---|---|
+| Model checkpoint | `RFD_8.pt` |
 | Number of designs | 6 |
-| Protein scaffold length | 120 residues |
+| Designed scaffold length | 120 residues |
 | Diffusion timesteps | 100 |
 | Amino acid decoding steps | 40 |
-| Ligand | COB |
+| Ligand | `COB` |
 | Motif residues | C1–C6 |
-| Secondary-structure conditioning | Enabled |
+| SS conditioning | Enabled |
 | Adjacency conditioning | Enabled |
 | Relative SASA conditioning | Enabled |
-| Radius of gyration conditioning | Enabled |
+| Radius-of-gyration conditioning | Enabled |
 | Guidepost conditioning | Enabled |
-
-The example uses six cobalt-coordinating residues as structural
-constraints while generating the surrounding protein scaffold.
 
 ### Configure input and output paths
 
@@ -334,7 +317,6 @@ constraints while generating the surrounding protein scaffold.
 export INPUT_PDB="$INPUT_DIR/output_cobalt_renumbered.pdb"
 
 export SS_PATH="$INPUT_DIR/output_cobalt_renumbered.ss"
-
 export ADJ_PATH="$INPUT_DIR/output_cobalt_renumbered.adj"
 
 export RFDIFFUSION_CKPT_PATH="$WEIGHTS_DIR/RFD_8.pt"
@@ -398,80 +380,54 @@ apptainer exec --nv \
   '++upstream_training_transforms.configs.GenerateSSADJTrainingTransform={p_is_ss_example:1,p_is_adj_example:1}'
 ```
 
-This command uses the generated `.ss` and `.adj` files rather
-than hardcoded paths to a separate working directory.
+The `scaffoldguided.target_ss` and `scaffoldguided.target_adj` parameters use the files generated in Section 5.
 
-**Important:** The input PDB must contain the required motif
-residues and ligand. The previous
-`output_cobalt_renumbered_ca_com.pdb` file contained only an
-`ORI` pseudoatom and cannot be used as the complete structural
-input for this example.
+**Important:** The input PDB must contain the motif residues referenced by the contig specification and any required ligand atoms. The earlier `output_cobalt_renumbered_ca_com.pdb` contained only an `ORI` pseudoatom and is not used here.
 
 ---
 
 ## 8. Conditioning Features
 
-The example uses several conditioning features to control
-the generated protein structure.
+The example combines several conditioning features.
 
-### Secondary-Structure and Adjacency Conditioning
+### Secondary structure and adjacency
 
-The following inference configuration loads the generated
-SS and adjacency files:
+Secondary-structure and adjacency conditioning is enabled through:
 
 ```bash
 scaffoldguided.target_ss="$SS_PATH"
-
 scaffoldguided.target_adj="$ADJ_PATH"
 ```
 
-The corresponding conditioning feature is enabled using:
+The `ss_adj_cond` feature and `LoadTargetSSADJTransform` load these features during inference.
 
-```bash
-'++extra_tXd=[radius_of_gyration_v2,relative_sasa_v2,sinusoidal_timestep_embedding,ss_adj_cond]'
-```
-
-The inference transform is:
-
-```bash
-'++upstream_inference_transforms.names=[LoadTargetSSADJTransform]'
-```
-
-### Relative Solvent-Accessible Surface Area
-
-Relative SASA conditioning is specified using:
+### Relative SASA
 
 ```bash
 inference.conditions.relative_sasa.mean=0.175
-
 inference.conditions.relative_sasa.std=0.075
 ```
 
-The corresponding feature configuration is:
+Feature configuration:
 
 ```bash
 '++extra_tXd_params.relative_sasa_v2={prob:0.2,low:0,high:0.2,n_bins:3}'
 ```
 
-### Radius of Gyration
-
-Radius-of-gyration conditioning is specified using:
+### Radius of gyration
 
 ```bash
 inference.conditions.radius_of_gyration.mean=12.5
-
 inference.conditions.radius_of_gyration.std=12.5
 ```
 
-The corresponding feature configuration is:
+Feature configuration:
 
 ```bash
 '++extra_tXd_params.radius_of_gyration_v2={prob:0.2,low:10,high:100,n_bins:9}'
 ```
 
-### Sinusoidal Timestep Embedding
-
-The timestep embedding is configured using:
+### Sinusoidal timestep embedding
 
 ```bash
 '++extra_tXd_params.sinusoidal_timestep_embedding={embedding_dim:20,max_positions:10000}'
@@ -479,7 +435,7 @@ The timestep embedding is configured using:
 
 ---
 
-## 9. Expected Output
+## 9. Expected Outputs
 
 The generated designs will be saved under:
 
@@ -487,53 +443,50 @@ The generated designs will be saved under:
 outputs/cobalt_ss_adj/
 ```
 
-The inference configuration requests six designs.
-
-Depending on the enabled output settings, RFdiffusion may
-generate:
-
-- Designed protein structures (`.pdb`)
-- Diffusion trajectories
-- TRB metadata files
-
-The output prefix is:
+The example generates six designs with the prefix:
 
 ```text
 RP-tips
 ```
 
+Depending on the output configuration, files may include:
+
+- Designed protein structures (`.pdb`)
+- Diffusion trajectories
+- TRB metadata (`.trb`)
+
 ---
 
 ## 10. Running Scripts Using the Apptainer Shebang
 
-The repository includes a shebang wrapper that automatically
-launches RFdiffusion scripts inside the Apptainer container.
-
-The wrapper is located at:
+The repository includes:
 
 ```text
 rf_diffusion/exec/rf_diffusion_aa_shebang.sh
 ```
 
-For Python scripts configured with the RFdiffusion shebang,
-the wrapper automatically:
+This script automatically:
 
 1. Determines the repository directory.
 2. Adds the repository to `PYTHONPATH`.
 3. Locates `bakerlab_rf_diffusion_aa.sif`.
-4. Launches the Python script inside Apptainer.
+4. Launches the script inside Apptainer.
 
-For example:
+Make sure the shebang runner is executable:
+
+```bash
+chmod +x "$RFDIFFUSION_DIR/exec/rf_diffusion_aa_shebang.sh"
+```
+
+Scripts configured with the appropriate shebang can be executed directly:
 
 ```bash
 ./rf_diffusion/run_inference.py --config-name=paul_0
 ```
 
-Additional Hydra configuration parameters must be provided
-for the intended design task.
+This minimal command is illustrative; the cobalt-binding example requires the additional inference parameters provided in Section 7.
 
-Alternatively, scripts can be launched explicitly using
-`apptainer exec`, as demonstrated above.
+Alternatively, scripts can be launched explicitly using `apptainer exec`.
 
 ---
 
@@ -541,19 +494,19 @@ Alternatively, scripts can be launched explicitly using
 
 ### Apptainer not found
 
-If the shebang reports:
+If you encounter:
 
 ```text
 ERROR: RFdiffusion Apptainer container not found
 ```
 
-Confirm the image exists:
+Check:
 
 ```bash
-ls -lh rf_diffusion/exec/bakerlab_rf_diffusion_aa.sif
+ls -lh "$SIF_PATH"
 ```
 
-If missing, download it using the instructions in Section 4.
+Download the container using Section 4 if it is missing.
 
 ### Missing Python dependencies
 
@@ -563,9 +516,7 @@ If you encounter:
 ModuleNotFoundError: No module named 'omegaconf'
 ```
 
-Confirm that your script is running inside the Apptainer container.
-
-Test with:
+Verify that the script is running inside the container:
 
 ```bash
 apptainer exec --nv "$SIF_PATH" \
@@ -574,18 +525,16 @@ apptainer exec --nv "$SIF_PATH" \
 
 ### Missing SS/Adj files
 
-Confirm that the generated files exist:
+Verify:
 
 ```bash
 ls -lh "$SS_PATH"
-
 ls -lh "$ADJ_PATH"
 ```
 
-The paths supplied through `scaffoldguided.target_ss` and
-`scaffoldguided.target_adj` must point to the generated files.
+If they do not exist, rerun the SS/adj generation step and check where `make_ss_adj_simple.py` writes its outputs.
 
-### Empty PDB structures
+### Empty input structures
 
 If inference fails with:
 
@@ -593,14 +542,29 @@ If inference fails with:
 ValueError: Empty file.
 ```
 
-Verify that the input PDB contains actual protein atom records:
+Check that the input PDB contains protein atom records:
 
 ```bash
 grep '^ATOM' "$INPUT_PDB" | head
 ```
 
-For this cobalt-binding example, ensure the input structure
-contains residues C1–C6 and the expected cobalt ligand.
+Also verify that the motif residues and ligand names match the inference configuration.
+
+### Broken Apptainer symlink
+
+Check whether the container path is a symlink:
+
+```bash
+ls -l "$SIF_PATH"
+```
+
+If it is broken:
+
+```bash
+unlink "$SIF_PATH"
+```
+
+Then rerun the download instructions.
 
 ---
 
@@ -609,9 +573,7 @@ contains residues C1–C6 and the expected cobalt ligand.
 - Run inference on a GPU-enabled compute node.
 - The RFdiffusion2 Apptainer image is downloaded separately.
 - Model checkpoints are tracked using Git LFS.
-- The SS/adj generation step must be completed before inference.
-- Generated outputs and large container files should not be committed
-  to GitHub.
-- The example uses repository-relative paths to improve portability.
-- The input structure, motif residue numbering, and ligand names must
-  be consistent with the inference configuration.
+- Generate the SS/adj files before running inference.
+- Ensure the input PDB contains the intended motif residues and ligand.
+- Do not commit Apptainer images or generated inference outputs to GitHub.
+- Use repository-relative paths for reproducibility.
