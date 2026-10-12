@@ -1,3 +1,42 @@
+## Basic Information
+
+This repository contains the modified All-Atom RFdiffusion implementation
+used in the following preprint:
+
+**Controlling metal-carbonate phase, form, and function through de novo protein design**
+
+Paul S. Kwon, Xinqi Li, Le Tracy Yu, Harley Pyles, Todd H. Lewis,
+Connor Weidle, Andrew J. Borst, Catherine C. Bodinger, Alex Kang,
+Hannah Nguyen, Johnny Mendoza, Kenneth D. Carr, Brian Coventry,
+Yang Hsia, Zsombor Molnar, Dongsheng Li, Bo Zhang,
+Brandi M. Cossairt, Shuai Zhang, Asim K. Bera,
+James De Yoreo, and David Baker.
+
+**bioRxiv** (2026).
+
+[Read the preprint](https://doi.org/10.64898/2026.06.10.730916)
+
+### Citation
+
+If you use this code in your research, please cite:
+
+```bibtex
+@article{kwon2026controlling,
+  title={Controlling metal-carbonate phase, form, and function through de novo protein design},
+  author={Kwon, Paul S and Li, Xinqi and Yu, Le Tracy and Pyles, Harley
+    and Lewis, Todd H and Weidle, Connor and Borst, Andrew J
+    and Bodinger, Catherine C and Kang, Alex and Nguyen, Hannah
+    and Mendoza, Johnny and Carr, Kenneth D and Coventry, Brian
+    and Hsia, Yang and Molnar, Zsombor and Li, Dongsheng
+    and Zhang, Bo and Cossairt, Brandi M and Zhang, Shuai
+    and Bera, Asim K and De Yoreo, James and Baker, David},
+  journal={bioRxiv},
+  year={2026},
+  doi={10.64898/2026.06.10.730916},
+  publisher={Cold Spring Harbor Laboratory}
+}
+```
+
 # RFdiffusion2-RP: SS/Adj Conditioning and Inference
 
 This repository provides an example of generating secondary-structure (SS) and adjacency (adj) conditioning features for RFdiffusion2.
@@ -606,129 +645,18 @@ Alternatively, scripts can be launched explicitly using `apptainer exec`.
 
 ---
 
-## 12. Troubleshooting
+## 12. Animating diffusion trajectories
 
-### Apptainer not found
+This can be pretty simple. You'll need a PDB of the final design (can have designed sidechains or not) and a PDB of the diffusion trajectory (use the *_Xt-1_traj.pdb file). Load both into PyMol and make sure the structures are aligned.
 
-If you encounter:
+Next, you'll need to tell PyMol how to turn trajectory “states” into movie “frames”. The following command assumes you have a traj file with 200 states. It assigns the 200th state as the first movie frame and then maps all states in reverse order until it places the first state onto frame 200. We do this because traj timecourses are backward. The “1×90” bit adds 90 additional frames of state 1 to the end of the movie, allowing the viewer to see the final structure for 3 seconds. (PyMol movies are 30 frames per second by default.)
 
-```text
-ERROR: RFdiffusion Apptainer container not found
-```
+PyMOL> mset 100 -1 1x90
+To make the trajectory look good, hide cartoon and instead show spheres. To make it look even better:
 
-Check:
+PyMOL> set sphere_scale,0.5
+To save that movie, just File → Save Movie As → Quicktime
 
-```bash
-ls -lh "$SIF_PATH"
-```
+Convert your saved video (.mov, .mp4, etc) into a GIF for free at https://ezgif.com/video-to-gif (and compress your GIF there too!)
 
-Download the container using Section 4 if it is missing.
-
-### Missing Python dependencies
-
-If you encounter:
-
-```text
-ModuleNotFoundError: No module named 'omegaconf'
-```
-
-Verify that the script is running inside the container:
-
-```bash
-apptainer exec --nv "$SIF_PATH" \
-    python -c "import omegaconf; print(omegaconf.__version__)"
-```
-
-### Missing `ipd` or RF2AA data
-
-Check that the cloned repository contains an importable `ipd` directory or a correctly initialized `lib/ipd` submodule. If imports report missing `rapidfuzz`, install it into your container's accessible Python environment and include that directory in `PYTHONPATH`.
-
-The RF2AA module also requires `rf2aa/cartbonded.json` and `rf2aa/atomized_protein_frames.pt`. Check these files exist if inference reports a `FileNotFoundError`. Git ignore rules such as `*.json` and `*.pt` can prevent them from being committed.
-
-### Missing SS/Adj files (Section 7 only)
-
-Verify:
-
-```bash
-ls -lh "$SS_PATH"
-ls -lh "$ADJ_PATH"
-```
-
-If they do not exist, rerun the SS/adj generation step and check where `make_ss_adj_simple.py` writes its outputs. Section 8 does not require these files.
-
-### Missing random-SS example PDB
-
-If the Section 8 example cannot find its PDB, check:
-
-```bash
-ls -lh "$INPUT_DIR/110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40.pdb"
-```
-
-This file must exist in the cloned repository's `helper_scripts/inputs/` directory and should be included in the GitHub commit.
-
-### Empty input structures
-
-If inference fails with:
-
-```text
-ValueError: Empty file.
-```
-
-Check that the input PDB contains protein atom records:
-
-```bash
-grep '^ATOM' "$INPUT_PDB" | head
-```
-
-Also verify that the motif residues and ligand names match the inference configuration.
-
-### Broken Apptainer symlink
-
-Check whether the container path is a symlink:
-
-```bash
-ls -l "$SIF_PATH"
-```
-
-If it is broken:
-
-```bash
-unlink "$SIF_PATH"
-```
-
-Then rerun the download instructions.
-
----
-
-## 13. Notes
-
-- Run inference on a GPU-enabled compute node.
-- The RFdiffusion2 Apptainer image is downloaded separately.
-- Model checkpoints are tracked using Git LFS.
-- Generate the SS/adj files before running the fixed SS/adj example (Section 7).
-- The random-SS example (Section 8) does not require an external `.ss` or `.adj` file.
-- The Section 7 SS/adj inputs describe 104 protein residues: 100 generated residues plus four motif-tip residues.
-- Make sure the Section 8 input PDB is available in `helper_scripts/inputs/` before inference.
-- Ensure the input PDB contains the intended motif residues and ligand.
-- Do not commit Apptainer images or generated inference outputs to GitHub.
-- Use repository-relative paths for reproducibility.
-
-### Committing the example input PDB and README
-
-From the cloned repository root, verify the new PDB and stage it with the updated README:
-
-```bash
-cd ~/github/RFdiffusion2-RP
-ls -lh helper_scripts/inputs/110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40.pdb
-
-git add README.md helper_scripts/inputs/110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40.pdb
-git status --short
-```
-
-If Git ignores the `.pdb` file, inspect the matching rule with `git check-ignore -v` and, if you intend to publish that structure, use `git add -f` for that specific PDB. Review the staged diff and ensure the structure may be shared before running:
-
-```bash
-git commit -m "Document random-SS inference and add example input PDB"
-git push origin main
-```
-
+You can make much better animations using scenes in PyMol. For example, you probably want to keep the final design hidden until the diffusion trajectory has converged. You can do this by creating scene 01 where the trajectory is visible but the design isn't, and scene 02 where both are visible. Then you can assign scene 01 to frame 1 and scene 02 to frame 200. Scenes also store camera movement, allowing you to spin/rotate/flip or zoom during your movie. Learn how to do all this and more at https://www.pymolwiki.org/index.php/MovieSchool
