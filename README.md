@@ -1,6 +1,6 @@
 ## Basic Information
 
-This repository contains the modified All-Atom RFdiffusion implementation
+This repository contains the modified RFdiffusion2 implementation
 used in the following preprint:
 
 **Controlling metal-carbonate phase, form, and function through de novo protein design**
