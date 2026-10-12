@@ -2,7 +2,7 @@
 
 This repository provides an example of generating secondary-structure (SS) and adjacency (adj) conditioning features for RFdiffusion2.
 
-The example demonstrates protein scaffold design around a cobalt-binding motif using a fine-tuned RFdiffusion2 checkpoint.
+The examples demonstrate protein scaffold design around cobalt-binding motifs using a fine-tuned RFdiffusion2 checkpoint. Section 7 uses precomputed secondary-structure and adjacency conditioning; Section 8 illustrates randomly sprinkled secondary-structure conditioning without external adjacency inputs.
 
 ## 1. Repository Structure
 
@@ -16,7 +16,8 @@ RFdiffusion2-RP/
 │       ├── output_cobalt_renumbered.pdb
 │       ├── output_cobalt_renumbered_tips.pdb
 │       ├── output_cobalt_renumbered.ss
-│       └── output_cobalt_renumbered.adj
+│       ├── output_cobalt_renumbered.adj
+│       └── 110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40.pdb
 ├── rf_diffusion/
 │   ├── aa_model.py
 │   ├── run_inference.py
@@ -75,6 +76,12 @@ export INPUT_DIR="$REPO_DIR/helper_scripts/inputs"
 export DESIGN_DIR="$REPO_DIR/outputs/cobalt_ss_adj"
 
 export PYTHONPATH="$REPO_DIR${PYTHONPATH:+:$PYTHONPATH}"
+```
+
+If your environment requires the extra Python dependency directory used during setup, prepend it:
+
+```bash
+export PYTHONPATH="$HOME/.local/rfdiffusion2-python:$REPO_DIR${PYTHONPATH:+:$PYTHONPATH}"
 ```
 
 Create the required directories:
@@ -190,7 +197,7 @@ This example generates SS and adjacency features from a cobalt-binding protein m
 
 ### Input PDB
 
-The example PDB for generating SS/adjacency conditioning is located at:
+The PDB used to generate the fixed SS/adjacency features is located at:
 
 ```text
 helper_scripts/inputs/output_cobalt_renumbered.pdb
@@ -202,7 +209,9 @@ Set its path:
 export INPUT_PDB="$INPUT_DIR/output_cobalt_renumbered.pdb"
 ```
 
-**Note:** SS and adjacency files are generated from `output_cobalt_renumbered.pdb`. During inference, a separate PDB, `output_cobalt_renumbered_tips.pdb`, is used to specify the four cobalt-coordinating residues (C1–C4).
+The separate inference PDB for the four-residue tip motif is
+`helper_scripts/inputs/output_cobalt_renumbered_tips.pdb`.
+The second inference example below uses a different PDB and randomly generated secondary-structure conditioning.
 
 ### Generate SS/Adj conditioning
 
@@ -241,7 +250,8 @@ helper_scripts/
     ├── output_cobalt_renumbered.pdb
     ├── output_cobalt_renumbered_tips.pdb
     ├── output_cobalt_renumbered.ss
-    └── output_cobalt_renumbered.adj
+    ├── output_cobalt_renumbered.adj
+    └── 110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40.pdb
 ```
 
 The exact output location depends on the implementation of `make_ss_adj_simple.py`.
@@ -300,7 +310,7 @@ This example generates protein scaffolds around a cobalt-binding motif using sec
 |---|---|
 | Model checkpoint | `RFD_8.pt` |
 | Number of designs | 6 |
-| Designed scaffold length | 100 residues |
+| Designed scaffold length | 100 residues (plus 4 fixed motif residues) |
 | Diffusion timesteps | 100 |
 | Amino acid decoding steps | 40 |
 | Ligand | `COB` |
@@ -326,9 +336,15 @@ export DESIGN_DIR="$REPO_DIR/outputs/cobalt_ss_adj"
 mkdir -p "$DESIGN_DIR"
 ```
 
-**Important:** The input PDB used for inference is `output_cobalt_renumbered_tips.pdb`, while the SS and adjacency conditioning files are generated from `output_cobalt_renumbered.pdb`.
+### Contig length and motif residues
 
-The conditioning files must remain compatible with the residue and ligand mapping used during inference.
+The SS/adjacency features describe **104 protein residues**. Four coordinating residues—`C1`, `C2`, `C3`, and `C4`—are explicitly included in the contig, and **each counts as one protein residue**. To keep the combined protein length at 104, the designable segment is `100-100`:
+
+```text
+100 newly designed residues + 4 motif-tip residues (C1–C4) = 104 protein residues
+```
+
+Therefore, use `contigmap.contigs=["100-100,C1,C2,C3,C4"]`, **not** `104-104,C1,C2,C3,C4`. The SS/adjacency arrays generated in Section 5 also include 84 small-molecule positions (188 positions total); those positions are distinct from the 104 protein residues.
 
 ### Run inference
 
@@ -384,26 +400,105 @@ apptainer exec --nv \
   '++upstream_training_transforms.configs.GenerateSSADJTrainingTransform={p_is_ss_example:1,p_is_adj_example:1}'
 ```
 
-The `scaffoldguided.target_ss` and `scaffoldguided.target_adj` parameters use the files generated in Section 5.
+The `scaffoldguided.target_ss` and `scaffoldguided.target_adj` parameters use the files generated in Section 5. Unlike SS/adj generation, inference uses `output_cobalt_renumbered_tips.pdb` so that `C1`–`C4` correspond to actual motif residues in the PDB.
 
-**Important:** The inference PDB must contain the motif residues referenced by the contig specification and any required ligand atoms.
-
-The motif residues C1–C4 correspond to two histidine and two aspartate residues:
-
-| Residue | Amino Acid | Atoms |
-|---|---|---|
-| C1 | HIS | CG, ND1, CD2, CE1, NE2 |
-| C2 | ASP | CG, OD1, OD2 |
-| C3 | HIS | CG, ND1, CD2, CE1, NE2 |
-| C4 | ASP | CG, OD1, OD2 |
-
-The earlier `output_cobalt_renumbered_ca_com.pdb` contained only an `ORI` pseudoatom and is not used here.
+**Important:** The input PDB must contain the motif residues referenced by the contig specification and any required ligand atoms. The earlier `output_cobalt_renumbered_ca_com.pdb` contained only an `ORI` pseudoatom and is not used here.
 
 ---
 
-## 8. Conditioning Features
+## 8. Random Secondary-Structure Conditioning (No Block-Adjacency Input)
 
-The example combines several conditioning features.
+This second example designs a cobalt-associated scaffold around four glutamate (`GLU`) tip residues using **randomly sprinkled secondary-structure conditioning**. It differs from Section 7: `SSSprinkleTransform` generates the SS pattern during inference, so the command does **not** load the precomputed `.ss` or `.adj` files and does not specify `scaffoldguided.target_ss`, `scaffoldguided.target_adj`, or `LoadTargetSSADJTransform`.
+
+The `HELIX` background and `min_mask`, `max_mask`, and `spread_efficiency` settings are preserved from the original example. This command assumes that `paul_0.yaml` already registers `SSSprinkleTransform` in the upstream inference transforms; `active=True` activates its configured transform. Check the YAML if Hydra reports an unknown key or the transform does not run.
+
+### Input PDB and output prefix
+
+The example uses this input structure from the cloned repository:
+
+```text
+helper_scripts/inputs/110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40.pdb
+```
+
+The corresponding path on the original cluster checkout is:
+
+```text
+/home/pkwon2/github/RFdiffusion2-RP/helper_scripts/inputs/110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40.pdb
+```
+
+Set the paths from the repository root:
+
+```bash
+export RANDOM_SS_INPUT_PDB="$INPUT_DIR/110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40.pdb"
+export RANDOM_SS_OUTPUT_PREFIX="$DESIGN_DIR/110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40_8"
+
+mkdir -p "$DESIGN_DIR"
+ls -lh "$RANDOM_SS_INPUT_PDB"
+```
+
+The input PDB should be committed alongside this README so that others can run the example after cloning. The path is specific to the user's cluster, but the inference command uses repository-relative environment variables.
+
+No `.ss` or `.adj` file needs to be supplied for **this** example. The fixed SS/adj example in Section 7 still requires its conditioning files.
+
+### Run inference with randomly sprinkled SS
+
+The command below preserves the original 60–80 length settings, four glutamate coordinating residues, 3 designs, and the supplied inference options, but uses environment variables and `apptainer exec` so it runs from the cloned repository:
+
+```bash
+apptainer exec --nv \
+  --env "PYTHONPATH=$PYTHONPATH" \
+  "$SIF_PATH" \
+  python "$RFDIFFUSION_DIR/run_inference.py" \
+  --config-name=paul_0.yaml \
+  guidepost_bonds=True \
+  inference.align_motif=False \
+  inference.ckpt_path="$RFDIFFUSION_CKPT_PATH" \
+  inference.num_designs=3 \
+  inference.output_prefix="$RANDOM_SS_OUTPUT_PREFIX" \
+  inference.input_pdb="$RANDOM_SS_INPUT_PDB" \
+  inference.final_step=1 \
+  inference.contig_as_guidepost=True \
+  inference.remove_guideposts_from_output=True \
+  inference.infer_guidepost_positions=True \
+  inference.guidepost_xyz_as_design=True \
+  inference.flexible_ligand=False \
+  inference.ligand=COB \
+  inference.state_dict_to_load=model_state_dict \
+  inference.deterministic=False \
+  inference.idealize_sidechain_outputs=True \
+  inference.radius=10.0 \
+  inference.write_trajectory=False \
+  inference.write_trb=True \
+  inference.write_trb_indep=False \
+  inference.write_trb_trajectory=False \
+  inference.center_motif=True \
+  inference.recenter_xt=False \
+  inference.update_seq_t=False \
+  inference.conditions.relative_sasa.mean=0.175 \
+  inference.conditions.relative_sasa.std=0.075 \
+  inference.conditions.radius_of_gyration.mean=12.5 \
+  inference.conditions.radius_of_gyration.std=12.5 \
+  diffuser.T=100 \
+  diffuser.aa_decode_steps=40 \
+  'contigmap.contigs=["60-80,A1,B2,C3,D4"]' \
+  'contigmap.length="60-80"' \
+  contigmap.contig_atoms="\"{'A1':'OE1,OE2,CD,CG','B2':'OE1,OE2,CD,CG','C3':'OE1,OE2,CD,CG','D4':'OE1,OE2,CD,CG'}\"" \
+  upstream_inference_transforms.configs.SSSprinkleTransform.active=True \
+  upstream_inference_transforms.configs.SSSprinkleTransform.background=HELIX \
+  upstream_inference_transforms.configs.SSSprinkleTransform.min_mask=2 \
+  upstream_inference_transforms.configs.SSSprinkleTransform.max_mask=4 \
+  upstream_inference_transforms.configs.SSSprinkleTransform.spread_efficiency=0.7
+```
+
+The four motif residues are PDB residues `A1`, `B2`, `C3`, and `D4` (one glutamate each). Their explicitly referenced side-chain atoms are `OE1`, `OE2`, `CD`, and `CG`.
+
+**Conditioning distinction:** Section 7 uses externally generated secondary-structure **and** adjacency inputs, whereas this example uses `SSSprinkleTransform` to generate randomized secondary-structure conditioning without supplying `.ss` or `.adj` input files. These CLI overrides do not, by themselves, disable any additional conditioning hard-coded into `paul_0.yaml`; inspect that configuration if you need to guarantee no other adjacency-related transform is active.
+
+---
+
+## 9. Conditioning Features
+
+The fixed SS/adjacency example in Section 7 combines several conditioning features.
 
 ### Secondary structure and adjacency
 
@@ -450,7 +545,7 @@ Feature configuration:
 
 ---
 
-## 9. Expected Outputs
+## 10. Expected Outputs
 
 The generated designs will be saved under:
 
@@ -458,32 +553,27 @@ The generated designs will be saved under:
 outputs/cobalt_ss_adj/
 ```
 
-The example generates six designs with the prefix:
+The fixed SS/adjacency example (Section 7) generates six designs with the prefix:
 
 ```text
 RP-tips
 ```
 
-Expected output filenames follow the convention:
+The random-SS example (Section 8) generates three designs using the prefix:
 
 ```text
-RP-tips_0.pdb
-RP-tips_1.pdb
-RP-tips_2.pdb
-RP-tips_3.pdb
-RP-tips_4.pdb
-RP-tips_5.pdb
+110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40_8
 ```
 
 Depending on the output configuration, files may include:
 
 - Designed protein structures (`.pdb`)
-- Diffusion trajectories
+- Diffusion trajectories for runs that set `inference.write_trajectory=True`
 - TRB metadata (`.trb`)
 
 ---
 
-## 10. Running Scripts Using the Apptainer Shebang
+## 11. Running Scripts Using the Apptainer Shebang
 
 The repository includes:
 
@@ -510,13 +600,13 @@ Scripts configured with the appropriate shebang can be executed directly:
 ./rf_diffusion/run_inference.py --config-name=paul_0
 ```
 
-This minimal command is illustrative; the cobalt-binding example requires the additional inference parameters provided in Section 7.
+This minimal command is illustrative; the examples in Sections 7 and 8 require their respective inference parameters.
 
 Alternatively, scripts can be launched explicitly using `apptainer exec`.
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 ### Apptainer not found
 
@@ -549,7 +639,13 @@ apptainer exec --nv "$SIF_PATH" \
     python -c "import omegaconf; print(omegaconf.__version__)"
 ```
 
-### Missing SS/Adj files
+### Missing `ipd` or RF2AA data
+
+Check that the cloned repository contains an importable `ipd` directory or a correctly initialized `lib/ipd` submodule. If imports report missing `rapidfuzz`, install it into your container's accessible Python environment and include that directory in `PYTHONPATH`.
+
+The RF2AA module also requires `rf2aa/cartbonded.json` and `rf2aa/atomized_protein_frames.pt`. Check these files exist if inference reports a `FileNotFoundError`. Git ignore rules such as `*.json` and `*.pt` can prevent them from being committed.
+
+### Missing SS/Adj files (Section 7 only)
 
 Verify:
 
@@ -558,37 +654,17 @@ ls -lh "$SS_PATH"
 ls -lh "$ADJ_PATH"
 ```
 
-If they do not exist, rerun the SS/adj generation step and check where `make_ss_adj_simple.py` writes its outputs.
+If they do not exist, rerun the SS/adj generation step and check where `make_ss_adj_simple.py` writes its outputs. Section 8 does not require these files.
 
-### Missing coordinating residues
+### Missing random-SS example PDB
 
-If inference fails with:
-
-```text
-AssertionError: ('C', 1) is not in pdb file!
-```
-
-Verify that the inference input PDB is:
+If the Section 8 example cannot find its PDB, check:
 
 ```bash
-export INPUT_PDB="$INPUT_DIR/output_cobalt_renumbered_tips.pdb"
+ls -lh "$INPUT_DIR/110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40.pdb"
 ```
 
-The contig specification requires chain C residues 1–4:
-
-```bash
-'contigmap.contigs=["100-100,C1,C2,C3,C4"]'
-```
-
-Check the corresponding residues in the PDB:
-
-```bash
-awk '/^ATOM/ && substr($0,22,1)=="C" {
-    resnum=substr($0,23,4)+0
-    if (resnum>=1 && resnum<=4)
-        print
-}' "$INPUT_PDB" | head -40
-```
+This file must exist in the cloned repository's `helper_scripts/inputs/` directory and should be included in the GitHub commit.
 
 ### Empty input structures
 
@@ -624,15 +700,35 @@ Then rerun the download instructions.
 
 ---
 
-## 12. Notes
+## 13. Notes
 
 - Run inference on a GPU-enabled compute node.
 - The RFdiffusion2 Apptainer image is downloaded separately.
 - Model checkpoints are tracked using Git LFS.
-- Generate the SS/adj files before running inference.
-- The SS/adj files are generated from `output_cobalt_renumbered.pdb`.
-- The inference input PDB is `output_cobalt_renumbered_tips.pdb`.
-- The inference motif consists of C1–C4 (HIS–ASP–HIS–ASP).
+- Generate the SS/adj files before running the fixed SS/adj example (Section 7).
+- The random-SS example (Section 8) does not require an external `.ss` or `.adj` file.
+- The Section 7 SS/adj inputs describe 104 protein residues: 100 generated residues plus four motif-tip residues.
+- Make sure the Section 8 input PDB is available in `helper_scripts/inputs/` before inference.
 - Ensure the input PDB contains the intended motif residues and ligand.
 - Do not commit Apptainer images or generated inference outputs to GitHub.
 - Use repository-relative paths for reproducibility.
+
+### Committing the example input PDB and README
+
+From the cloned repository root, verify the new PDB and stage it with the updated README:
+
+```bash
+cd ~/github/RFdiffusion2-RP
+ls -lh helper_scripts/inputs/110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40.pdb
+
+git add README.md helper_scripts/inputs/110_tips_2_ca_plane_ori_linesremoved_chunked_noORI_cleaned_ORI_40.pdb
+git status --short
+```
+
+If Git ignores the `.pdb` file, inspect the matching rule with `git check-ignore -v` and, if you intend to publish that structure, use `git add -f` for that specific PDB. Review the staged diff and ensure the structure may be shared before running:
+
+```bash
+git commit -m "Document random-SS inference and add example input PDB"
+git push origin main
+```
+
