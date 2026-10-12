@@ -13,7 +13,10 @@ RFdiffusion2-RP/
 │   ├── README.md
 │   ├── make_ss_adj_simple.py
 │   └── inputs/
-│       └── output_cobalt_renumbered.pdb
+│       ├── output_cobalt_renumbered.pdb
+│       ├── output_cobalt_renumbered_tips.pdb
+│       ├── output_cobalt_renumbered.ss
+│       └── output_cobalt_renumbered.adj
 ├── rf_diffusion/
 │   ├── aa_model.py
 │   ├── run_inference.py
@@ -48,12 +51,6 @@ cd RFdiffusion2-RP
 ```
 
 Replace `YOUR_USERNAME` with your GitHub username.
-
-If the repository uses Git submodules:
-
-```bash
-git submodule update --init --recursive
-```
 
 Download model checkpoints tracked by Git LFS:
 
@@ -193,7 +190,7 @@ This example generates SS and adjacency features from a cobalt-binding protein m
 
 ### Input PDB
 
-The example PDB is located at:
+The example PDB for generating SS/adjacency conditioning is located at:
 
 ```text
 helper_scripts/inputs/output_cobalt_renumbered.pdb
@@ -204,6 +201,8 @@ Set its path:
 ```bash
 export INPUT_PDB="$INPUT_DIR/output_cobalt_renumbered.pdb"
 ```
+
+**Note:** SS and adjacency files are generated from `output_cobalt_renumbered.pdb`. During inference, a separate PDB, `output_cobalt_renumbered_tips.pdb`, is used to specify the four cobalt-coordinating residues (C1–C4).
 
 ### Generate SS/Adj conditioning
 
@@ -240,6 +239,7 @@ helper_scripts/
 ├── make_ss_adj_simple.py
 └── inputs/
     ├── output_cobalt_renumbered.pdb
+    ├── output_cobalt_renumbered_tips.pdb
     ├── output_cobalt_renumbered.ss
     └── output_cobalt_renumbered.adj
 ```
@@ -300,11 +300,11 @@ This example generates protein scaffolds around a cobalt-binding motif using sec
 |---|---|
 | Model checkpoint | `RFD_8.pt` |
 | Number of designs | 6 |
-| Designed scaffold length | 120 residues |
+| Designed scaffold length | 100 residues |
 | Diffusion timesteps | 100 |
 | Amino acid decoding steps | 40 |
 | Ligand | `COB` |
-| Motif residues | C1–C6 |
+| Motif residues | C1–C4 |
 | SS conditioning | Enabled |
 | Adjacency conditioning | Enabled |
 | Relative SASA conditioning | Enabled |
@@ -314,7 +314,7 @@ This example generates protein scaffolds around a cobalt-binding motif using sec
 ### Configure input and output paths
 
 ```bash
-export INPUT_PDB="$INPUT_DIR/output_cobalt_renumbered.pdb"
+export INPUT_PDB="$INPUT_DIR/output_cobalt_renumbered_tips.pdb"
 
 export SS_PATH="$INPUT_DIR/output_cobalt_renumbered.ss"
 export ADJ_PATH="$INPUT_DIR/output_cobalt_renumbered.adj"
@@ -325,6 +325,10 @@ export DESIGN_DIR="$REPO_DIR/outputs/cobalt_ss_adj"
 
 mkdir -p "$DESIGN_DIR"
 ```
+
+**Important:** The input PDB used for inference is `output_cobalt_renumbered_tips.pdb`, while the SS and adjacency conditioning files are generated from `output_cobalt_renumbered.pdb`.
+
+The conditioning files must remain compatible with the residue and ligand mapping used during inference.
 
 ### Run inference
 
@@ -364,8 +368,8 @@ apptainer exec --nv \
   inference.conditions.radius_of_gyration.std=12.5 \
   diffuser.T=100 \
   diffuser.aa_decode_steps=40 \
-  'contigmap.contigs=["120-120,C1,C2,C3,C4,C5,C6"]' \
-  'contigmap.contig_atoms="{'"'"'C1'"'"':'"'"'CG,ND1,CD2,CE1,NE2'"'"','"'"'C2'"'"':'"'"'CG,OD1,OD2'"'"','"'"'C3'"'"':'"'"'CG,ND1,CD2,CE1,NE2'"'"','"'"'C4'"'"':'"'"'CG,OD1,OD2'"'"','"'"'C5'"'"':'"'"'CG,ND1,CD2,CE1,NE2'"'"','"'"'C6'"'"':'"'"'CG,OD1,OD2'"'"'}"' \
+  'contigmap.contigs=["100-100,C1,C2,C3,C4"]' \
+  contigmap.contig_atoms="\"{'C1':'CG,ND1,CD2,CE1,NE2','C2':'CG,OD1,OD2','C3':'CG,ND1,CD2,CE1,NE2','C4':'CG,OD1,OD2'}\"" \
   'contigmap.has_termini=[True]' \
   scaffoldguided.target_ss="$SS_PATH" \
   scaffoldguided.target_adj="$ADJ_PATH" \
@@ -382,7 +386,18 @@ apptainer exec --nv \
 
 The `scaffoldguided.target_ss` and `scaffoldguided.target_adj` parameters use the files generated in Section 5.
 
-**Important:** The input PDB must contain the motif residues referenced by the contig specification and any required ligand atoms. The earlier `output_cobalt_renumbered_ca_com.pdb` contained only an `ORI` pseudoatom and is not used here.
+**Important:** The inference PDB must contain the motif residues referenced by the contig specification and any required ligand atoms.
+
+The motif residues C1–C4 correspond to two histidine and two aspartate residues:
+
+| Residue | Amino Acid | Atoms |
+|---|---|---|
+| C1 | HIS | CG, ND1, CD2, CE1, NE2 |
+| C2 | ASP | CG, OD1, OD2 |
+| C3 | HIS | CG, ND1, CD2, CE1, NE2 |
+| C4 | ASP | CG, OD1, OD2 |
+
+The earlier `output_cobalt_renumbered_ca_com.pdb` contained only an `ORI` pseudoatom and is not used here.
 
 ---
 
@@ -447,6 +462,17 @@ The example generates six designs with the prefix:
 
 ```text
 RP-tips
+```
+
+Expected output filenames follow the convention:
+
+```text
+RP-tips_0.pdb
+RP-tips_1.pdb
+RP-tips_2.pdb
+RP-tips_3.pdb
+RP-tips_4.pdb
+RP-tips_5.pdb
 ```
 
 Depending on the output configuration, files may include:
@@ -534,6 +560,36 @@ ls -lh "$ADJ_PATH"
 
 If they do not exist, rerun the SS/adj generation step and check where `make_ss_adj_simple.py` writes its outputs.
 
+### Missing coordinating residues
+
+If inference fails with:
+
+```text
+AssertionError: ('C', 1) is not in pdb file!
+```
+
+Verify that the inference input PDB is:
+
+```bash
+export INPUT_PDB="$INPUT_DIR/output_cobalt_renumbered_tips.pdb"
+```
+
+The contig specification requires chain C residues 1–4:
+
+```bash
+'contigmap.contigs=["100-100,C1,C2,C3,C4"]'
+```
+
+Check the corresponding residues in the PDB:
+
+```bash
+awk '/^ATOM/ && substr($0,22,1)=="C" {
+    resnum=substr($0,23,4)+0
+    if (resnum>=1 && resnum<=4)
+        print
+}' "$INPUT_PDB" | head -40
+```
+
 ### Empty input structures
 
 If inference fails with:
@@ -574,6 +630,9 @@ Then rerun the download instructions.
 - The RFdiffusion2 Apptainer image is downloaded separately.
 - Model checkpoints are tracked using Git LFS.
 - Generate the SS/adj files before running inference.
+- The SS/adj files are generated from `output_cobalt_renumbered.pdb`.
+- The inference input PDB is `output_cobalt_renumbered_tips.pdb`.
+- The inference motif consists of C1–C4 (HIS–ASP–HIS–ASP).
 - Ensure the input PDB contains the intended motif residues and ligand.
 - Do not commit Apptainer images or generated inference outputs to GitHub.
 - Use repository-relative paths for reproducibility.
