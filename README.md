@@ -5,15 +5,6 @@ used in the following preprint:
 
 **Controlling metal-carbonate phase, form, and function through de novo protein design**
 
-Paul S. Kwon, Xinqi Li, Le Tracy Yu, Harley Pyles, Todd H. Lewis,
-Connor Weidle, Andrew J. Borst, Catherine C. Bodinger, Alex Kang,
-Hannah Nguyen, Johnny Mendoza, Kenneth D. Carr, Brian Coventry,
-Yang Hsia, Zsombor Molnar, Dongsheng Li, Bo Zhang,
-Brandi M. Cossairt, Shuai Zhang, Asim K. Bera,
-James De Yoreo, and David Baker.
-
-**bioRxiv** (2026).
-
 [Read the preprint](https://doi.org/10.64898/2026.06.10.730916)
 
 ### Citation
@@ -36,6 +27,10 @@ If you use this code in your research, please cite:
   publisher={Cold Spring Harbor Laboratory}
 }
 ```
+## Protein Assembly Example
+
+### Cobalt Binder
+![Protein-Mineral Interface](assets/gifs/protein-mineral.gif)
 
 # RFdiffusion2-RP: SS/Adj Conditioning and Inference
 
